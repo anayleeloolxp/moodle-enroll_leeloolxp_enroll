@@ -218,12 +218,120 @@ class enrol_leeloolxp_enroll_observer {
         // echo $eventname;
         /* file_put_contents(dirname(__FILE__) . '/debug/' . strtotime(date('Y-m-d H:i:s')). ".txt", print_r($events->get_data(),true) ); */
 
-        if($eventname == '\core\event\course_category_created' || $eventname ==  '\core\event\course_category_updated') { 
+        if ($eventname == '\core\event\course_updated')  {
+            // move course/category sync
+            $eventdata = $events->get_data();
+            $courseid = $eventdata['objectid'];
+            $categoryid = $eventdata['other']['updatedfields']['category'];
+
+
+
+            $postdata = '&useremail=' . base64_encode($USER->email) . '&courseid=' . $courseid . '&categoryid=' . $categoryid;
+
+            $url = $teamniourl . '/admin/sync_moodle_course/move_course_category';
+            $curl = new curl;
+            $options = array(
+                'CURLOPT_RETURNTRANSFER' => true,
+                'CURLOPT_HEADER' => false,
+                'CURLOPT_POST' => 1,
+            );
+            $output = $curl->post($url, $postdata, $options);
+            // print_r($output);die;
+        }
+
+        if ($eventname == '\core\event\user_updated' || $eventname == '\core\event\user_deleted')  {
+        // user suspended && deleted
+            $eventdata = $events->get_data();
+            $userid = $eventdata['objectid'];
+            $userdata = $DB->get_record_sql("select email,deleted,suspended,timemodified,username from {user} where id = '$userid'");
+            if ($eventname == '\core\event\user_deleted') {
+                $useremail = str_replace('.'.$userdata->timemodified, '', $userdata->username);
+                $userdata->email = $useremail;
+            }
+
+            $postdataassign = '&userdata=' . json_encode($userdata);
+
+            $url = $teamniourl . '/admin/sync_moodle_course/update_user_data';
+            $curl = new curl;
+            $options = array(
+                'CURLOPT_RETURNTRANSFER' => true,
+                'CURLOPT_HEADER' => false,
+                'CURLOPT_POST' => 1,
+            );
+            $output = $curl->post($url, $postdataassign, $options);
+            // print_r($output);die;
+        }
+
+        if ($eventname == '\mod_assign\event\submission_status_updated')  {
+            $eventdata = $events->get_data();
+            $postdataassign = '&useremail=' . base64_encode($USER->email) . '&activity_id=' . $eventdata['contextinstanceid'];
+
+            $url = $teamniourl . '/admin/sync_moodle_course/remove_assingment_submission';
+            $curl = new curl;
+            $options = array(
+                'CURLOPT_RETURNTRANSFER' => true,
+                'CURLOPT_HEADER' => false,
+                'CURLOPT_POST' => 1,
+            );
+            $output = $curl->post($url, $postdataassign, $options);
+        }
+
+        if ($eventname == '\mod_forum\event\post_created' || $eventname == '\mod_forum\event\post_deleted')  { // forum reply
+            $eventdata = $events->get_data();
+            $userid = $eventdata['userid'];
+            $useralldiscussion = $DB->get_records_sql("SELECT fp.id  as post_id, fp.discussion , fp.created , fp.modified , fd.course , cm.id as activityid FROM {forum_posts} fp left join {forum_discussions} fd on fd.id = fp.discussion left join {course_modules} cm on cm.instance = fd.forum where fp.userid = '$userid' AND `module` = '9' ");
+            $postdataforum = '&useremail=' . base64_encode($USER->email) . '&data=' . json_encode($useralldiscussion);
+
+            $url = $teamniourl . '/admin/sync_moodle_course/insert_update_forum_posts';
+            $curl = new curl;
+            $options = array(
+                'CURLOPT_RETURNTRANSFER' => true,
+                'CURLOPT_HEADER' => false,
+                'CURLOPT_POST' => 1,
+            );
+            $output = $curl->post($url, $postdataforum, $options);
+
+
+        }
+
+        if ($eventname == '\mod_forum\event\discussion_created' || $eventname == '\mod_forum\event\discussion_deleted') { // discussion created/deleted
+            $eventdata = $events->get_data();
+            $userid = $eventdata['userid'];
+            $useralldiscussion = $DB->get_records_sql("SELECT fd.id  as moodleid, fd.course , fd.name , fd.name , fd.timemodified , cm.id as activityid FROM {forum_discussions} fd left join {course_modules} cm on cm.instance = fd.forum where fd.userid = '$userid' AND `module` = '9' ");
+            $postdataforum = '&useremail=' . base64_encode($USER->email) . '&data=' . json_encode($useralldiscussion);
+
+            $url = $teamniourl . '/admin/sync_moodle_course/insert_update_forum_discussion';
+            $curl = new curl;
+            $options = array(
+                'CURLOPT_RETURNTRANSFER' => true,
+                'CURLOPT_HEADER' => false,
+                'CURLOPT_POST' => 1,
+            );
+            $output = $curl->post($url, $postdataforum, $options);
+
+        }
+
+        if ($eventname == '\assignsubmission_file\event\assessable_uploaded' || $eventname == '\mod_choice\event\answer_created'|| $eventname == '\mod_feedback\event\response_submitted' || $eventname == '\mod_forum\event\assessable_uploaded' || $eventname == '\mod_glossary\event\entry_created' || $eventname == '\mod_lesson\event\question_answered' || $eventname == '\mod_quiz\event\attempt_submitted' || $eventname == '\mod_survey\event\response_submitted' || $eventname == '\mod_workshop\event\submission_created') {
 
             $eventdata = $events->get_data();
-            
+            $postdataassign = '&useremail=' . base64_encode($USER->email) . '&activity_id=' . $eventdata['contextinstanceid'];
+
+            $url = $teamniourl . '/admin/sync_moodle_course/insert_activity_submission_date';
+            $curl = new curl;
+            $options = array(
+                'CURLOPT_RETURNTRANSFER' => true,
+                'CURLOPT_HEADER' => false,
+                'CURLOPT_POST' => 1,
+            );
+            $output = $curl->post($url, $postdataassign, $options);
+        }
+
+        if($eventname == '\core\event\course_category_created' || $eventname ==  '\core\event\course_category_updated') {
+
+            $eventdata = $events->get_data();
+
             $iddd = $eventdata['objectid'];
-            $catdatamin = $DB->get_records_sql("select * from {course_categories} where id = '$iddd'"); 
+            $catdatamin = $DB->get_records_sql("select * from {course_categories} where id = '$iddd'");
 
             $postdataworkshopgrade = '&useremail='.base64_encode($USER->email).'&cat_data='.json_encode($catdatamin);
 
@@ -234,7 +342,7 @@ class enrol_leeloolxp_enroll_observer {
                 'CURLOPT_HEADER' => false,
                 'CURLOPT_POST' => count($postdataworkshopgrade),
             );
-            $output = $curl->post($url, $postdataworkshopgrade, $options); 
+            $output = $curl->post($url, $postdataworkshopgrade, $options);
 
         }
 
@@ -423,8 +531,8 @@ class enrol_leeloolxp_enroll_observer {
 
             $objecttable = $eventdata['objecttable'];
             $objectid = $eventdata['objectid'];
-            $fulldata  =  $events->get_record_snapshot($objecttable,$objectid);             
-            
+            $fulldata  =  $events->get_record_snapshot($objecttable,$objectid);
+
 
             $sql = "SELECT iteminstance,itemnumber FROM {grade_items} where id = ? ";
             $itemdata = $DB->get_record_sql($sql, [$fulldata->itemid]);
@@ -439,7 +547,7 @@ class enrol_leeloolxp_enroll_observer {
             if (!empty($eventdata['other']['overridden'])) {
 
                 $sql = "SELECT * FROM {grade_grades_history} where oldid = ? AND itemid = ? AND userid = ? ORDER BY `id` DESC ";
-                $forumgradedata = $DB->get_record_sql($sql, [$eventdata['objectid'] ,$eventdata['other']['itemid'],$eventdata['relateduserid']]);                
+                $forumgradedata = $DB->get_record_sql($sql, [$eventdata['objectid'] ,$eventdata['other']['itemid'],$eventdata['relateduserid']]);
 
                 $url = $teamniourl . '/admin/sync_moodle_course/insert_grade_history';
 
@@ -447,7 +555,7 @@ class enrol_leeloolxp_enroll_observer {
 
                 $sql = "SELECT * FROM {course_modules} where course = ? AND module = ? AND instance = ? ";
                 $forummodule = $DB->get_record_sql($sql, [$eventdata['courseid'] ,'9' ,$itemdata->iteminstance]);
-                $forumgradedata->activity_id = $forummodule->id; 
+                $forumgradedata->activity_id = $forummodule->id;
 
                 $url = $teamniourl . '/admin/sync_moodle_course/update_grade_forum_grade';
 
@@ -515,7 +623,7 @@ class enrol_leeloolxp_enroll_observer {
             $lessiongradedata = json_encode($events->get_data());
 
             $objecttable = $eventdata['objecttable'];
-            $objectid = $eventdata['objectid']; 
+            $objectid = $eventdata['objectid'];
             $lessionrec  =  $events->get_record_snapshot($objecttable,$objectid);
 
             $sql = "SELECT email FROM {user} where id = ?";
@@ -542,7 +650,7 @@ class enrol_leeloolxp_enroll_observer {
                 'CURLOPT_HEADER' => false,
                 'CURLOPT_POST' => count($postdatalessiongrade),
             );
-            $output = $curl->post($url, $postdatalessiongrade, $options); 
+            $output = $curl->post($url, $postdatalessiongrade, $options);
 
         }
 
@@ -626,24 +734,24 @@ class enrol_leeloolxp_enroll_observer {
             $grededata = '';
             $gredegradedatastring = '';
             $gradecategory = '';
-        }  
+        }
 
         session_start();
         $gradehistoryid = $_SESSION['gradehistoryid'];
-        $gradegradesid = $_SESSION['gradegradesid'];   
+        $gradegradesid = $_SESSION['gradegradesid'];
 
         $sql = "SELECT ggh.*,u.email  FROM {grade_grades} as ggh left join {user} as u on ggh.userid = u.id where ggh.id > ? ";
         $gradegradesdata = $DB->get_records_sql($sql, [$gradegradesid]);
 
         $sql = "SELECT ggh.*,u.email  FROM {grade_grades_history} as ggh left join {user} as u on ggh.userid = u.id where ggh.id > ? ";
-        $gradehistorydata = $DB->get_records_sql($sql, [$gradehistoryid]);  
-        
+        $gradehistorydata = $DB->get_records_sql($sql, [$gradehistoryid]);
+
 
         $postdata = '&gradegradesdata=' . json_encode($gradegradesdata) .'&gradehistorydata=' . json_encode($gradehistorydata) .'&moodle_user_id=' . $userid . '&course_id=' . $courseid . '&activity_id=' .
 
         $contextinstanceid . "&mod_name=" . $component . "&user_email=" . base64_encode($USER->email).
 
-        "&action=".$action.'&detail='.$alldetail.'&event_name='.$eventname.$grededata.$gredegradedatastring.$gradecategory; 
+        "&action=".$action.'&detail='.$alldetail.'&event_name='.$eventname.$grededata.$gredegradedatastring.$gradecategory;
 
         $url = $teamniourl . '/admin/sync_moodle_course/update_viewed_log';
         $curl = new curl;
@@ -655,13 +763,13 @@ class enrol_leeloolxp_enroll_observer {
 
             'CURLOPT_POST' => 1,
         );
-        $output = $curl->post($url, $postdata, $options); 
-        
+        $output = $curl->post($url, $postdata, $options);
+
         if (!empty($output)) {
             $output_arr = explode('&', $output);
             $_SESSION['gradegradesid'] = $output_arr[0];
-            $_SESSION['gradehistoryid'] = $output_arr[1]; 
-        } 
+            $_SESSION['gradehistoryid'] = $output_arr[1];
+        }
     }
 
 
@@ -1536,7 +1644,7 @@ class enrol_leeloolxp_enroll_observer {
                 'CURLOPT_POST' => 1,
             );
             $output = $curl->post($url, $postdata, $options);
-            $output = json_decode($output); 
+            $output = json_decode($output);
             session_start();
             $_SESSION['gradehistoryid'] = $output->grade_history_id;
             $_SESSION['gradegradesid'] = $output->grade_grades_id;
